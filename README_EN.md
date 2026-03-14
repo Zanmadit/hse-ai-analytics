@@ -9,12 +9,12 @@ This solution integrates data on incidents and safety behavior audits, transform
 [Task](https://astanahub.com/ru/tech_task/vnedrenie-ii-v-sfere-okhrany-truda1772626245)
 
 ## Key Functions:
-    - **Predictive Analytics**: Forecasts the number of incidents for 3, 6, and 12 months.
-    - **Risk scoring**: Automatic identification of the “Top 5 risk areas” among organizations and production sites.
-    - **NLP Analysis**: Clustering of textual incident descriptions to identify underlying causes of incidents.
-    - **Alert System**: Automatic notifications upon detection of systematic violations in the “Korgau Maps” module.
-    - **Economic Impact**: Dynamic calculation of ROI and avoided costs (in tenge) based on reduced injury rates.
-    - **Recommendations**: Generation of specific preventive measures based on data analysis.
+- **Predictive Analytics**: Forecasts the number of incidents for 3, 6, and 12 months.
+- **Risk scoring**: Automatic identification of the “Top 5 risk areas” among organizations and production sites.
+- **NLP Analysis**: Clustering of textual incident descriptions to identify underlying causes of incidents.
+- **Alert System**: Automatic notifications upon detection of systematic violations in the “Korgau Maps” module.
+- **Economic Impact**: Dynamic calculation of ROI and avoided costs (in tenge) based on reduced injury rates.
+- **Recommendations**: Generation of specific preventive measures based on data analysis.
 
 
 ## Project Structure

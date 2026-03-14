@@ -1,7 +1,7 @@
 [project]
 name = "hse-ai-analytics"
 version = "0.1.0"
-description = "Add your description here"
+description = "An intelligent predictive analytics module for occupational health and safety and industrial safety systems."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
