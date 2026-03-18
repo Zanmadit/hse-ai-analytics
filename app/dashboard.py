@@ -13,7 +13,6 @@ import numpy as np
 
 st.set_page_config(
     page_title="HSE Аналитика",
-    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -36,9 +35,35 @@ st.markdown("""
   [data-testid="stMetricLabel"]                 { color: #4a6a88 !important; font-size: .82rem !important; }
   [data-testid="stMetricDelta"]                 { font-size: .8rem !important; }
 
-  [data-testid="stTabs"] [role="tablist"]       { background: #0d1520; border-radius: 10px; padding: 4px; gap: 4px; }
-  [data-testid="stTabs"] [role="tab"]           { color: #4a6a88; border-radius: 8px; font-weight: 500; }
-  [data-testid="stTabs"] [aria-selected="true"] { background: #1a6bff !important; color: #fff !important; font-weight: 700 !important; }
+
+  /* ── Tabs: растягиваем на всю ширину, текст не обрезается ── */
+  [data-testid="stTabs"] [role="tablist"] {
+    background: #0d1520;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 2px;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;          /* Firefox */
+  }
+  [data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar { display: none; }
+  [data-testid="stTabs"] [role="tab"] {
+    color: #4a6a88;
+    border-radius: 8px;
+    font-weight: 500;
+    white-space: nowrap;            /* не переносить */
+    flex: 1 1 0;                    /* равномерно растянуть */
+    text-align: center;
+    min-width: 0;
+    font-size: 0.88rem;
+    padding: 6px 10px !important;
+  }
+  [data-testid="stTabs"] [aria-selected="true"] {
+    background: #1a6bff !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+  }
 
   [data-testid="stSelectbox"] > div,
   [data-testid="stMultiSelect"] > div           { background: #111820 !important; border: 1px solid #1a2a3a !important; border-radius: 8px; }
@@ -195,13 +220,13 @@ with st.sidebar:
     st.markdown("---")
 
     years_all = sorted(inc["_year"].dropna().unique().astype(int).tolist())
-    sel_years = st.multiselect("📅 Год", years_all, default=years_all)
+    sel_years = st.multiselect("Год", years_all, default=years_all)
 
     orgs_all = ["Все"] + (sorted(inc[ORG_COL].dropna().unique().tolist()) if ORG_COL in inc.columns else [])
-    sel_org  = st.selectbox("🏢 Организация", orgs_all)
+    sel_org  = st.selectbox("Организация", orgs_all)
 
     bds_all = ["Все"] + (sorted(inc[BD_COL].dropna().unique().tolist()) if BD_COL in inc.columns else [])
-    sel_bd  = st.selectbox("📁 Бизнес направление", bds_all)
+    sel_bd  = st.selectbox("Бизнес направление", bds_all)
 
     st.markdown("---")
     years_str = f"{int(inc['_year'].min())}–{int(inc['_year'].max())}" if not inc["_year"].isna().all() else "—"
@@ -226,11 +251,11 @@ if sel_years:
 # ─── TABS ─────────────────────────────────────────────────────────────────────
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊  Обзор / KPI",
-    "⚠️  Происшествия",
-    "🗺️  Карта Коргау",
-    "🔮  Предиктив",
-    "🚨  Алерты & Риски",
+    "Обзор / KPI",
+    "Происшествия",
+    "Карта Коргау",
+    "Предиктив",
+    "Алерты & Риски",
 ])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -241,16 +266,16 @@ with tab1:
     st.markdown("## Обзор безопасности")
 
     k = st.columns(5)
-    k[0].metric("💥 Происшествий",        len(fi))
-    k[1].metric("🏥 Несчастных случаев",
+    k[0].metric("Происшествий",        len(fi))
+    k[1].metric("Несчастных случаев",
                 int(fi["Несчастный случай"].sum()) if "Несчастный случай" in fi.columns else "—")
-    k[2].metric("🔴 Критических алертов",
+    k[2].metric("Критических алертов",
                 int(fk["критическое оповещание"].sum()) if "критическое оповещание" in fk.columns else "—")
-    k[3].metric("📊 Ср. риск Коргау",
+    k[3].metric("Ср. риск Коргау",
                 round(fk["риск"].mean(), 1) if "риск" in fk.columns else "—",
                 delta="/ 5 макс")
     resolve_col = "Было ли небезопасное условие / поведение исправлено и опасность устранена?"
-    k[4].metric("✅ Устранено нарушений",
+    k[4].metric("Устранено нарушений",
                 f"{int(fk[resolve_col].mean()*100)}%" if resolve_col in fk.columns else "—")
 
     st.markdown("---")
@@ -325,13 +350,13 @@ with tab2:
 
     f1, f2, f3, f4 = st.columns(4)
     if "В рабочее время" in fi.columns:
-        f1.metric("⏱️ В рабочее время",   bool_count(fi["В рабочее время"]))
+        f1.metric("В рабочее время",   bool_count(fi["В рабочее время"]))
     if "На рабочем месте" in fi.columns:
-        f2.metric("📍 На рабочем месте",  bool_count(fi["На рабочем месте"]))
+        f2.metric("На рабочем месте",  bool_count(fi["На рабочем месте"]))
     if "Несчастный случай" in fi.columns:
-        f3.metric("🏥 Несчастных случаев", bool_count(fi["Несчастный случай"]))
+        f3.metric("Несчастных случаев", bool_count(fi["Несчастный случай"]))
     if "Подрядная организация" in fi.columns:
-        f4.metric("🏗️ Подрядчиков",       fi["Подрядная организация"].dropna().nunique())
+        f4.metric("Подрядчиков",       fi["Подрядная организация"].dropna().nunique())
 
     st.markdown("---")
 
@@ -365,20 +390,25 @@ with tab2:
 
     # Heatmap
     if ORG_COL in fi.columns and "Вид работ" in fi.columns:
-        st.markdown("### 🔥 Тепловая карта: Организация × Вид работ")
+        st.markdown("### Тепловая карта: Организация × Вид работ")
         hm = fi.groupby([ORG_COL,"Вид работ"]).size().reset_index(name="n")
         hm_p = hm.pivot(index=ORG_COL, columns="Вид работ", values="n").fillna(0)
+        # Обрезаем длинные названия колонок для читаемости
+        short_cols = [c[:22] + "…" if len(c) > 22 else c for c in hm_p.columns.tolist()]
         fig_hm = go.Figure(go.Heatmap(
-            z=hm_p.values, x=hm_p.columns.tolist(), y=hm_p.index.tolist(),
+            z=hm_p.values,
+            x=short_cols,
+            y=hm_p.index.tolist(),
             colorscale=[[0,"#111820"],[0.5,"#1a4baa"],[1,"#ff3b30"]],
             hovertemplate="<b>%{y}</b><br>%{x}: %{z}<extra></extra>",
         ))
-        apply_layout(fig_hm, height=380, title=title_cfg("Интенсивность происшествий"),
-                     xaxis_extra=dict(tickangle=-35))
+        apply_layout(fig_hm, height=420, title=title_cfg("Интенсивность происшествий"),
+                     xaxis_extra=dict(tickangle=-40, tickfont=dict(size=10, color="#4a6a88")),
+                     margin=dict(l=10, r=10, t=44, b=120))
         st.plotly_chart(fig_hm, width='stretch')
 
     # Таблица
-    st.markdown("### 📋 Таблица происшествий")
+    st.markdown("### Таблица происшествий")
     show = [c for c in ["_date", BD_COL, "Вид работ", "Должность пострадавшего",
                          "Тяжесть травмы","Пострадавшая часть тела",
                          "Предварительные причины", ORG_COL,
@@ -399,12 +429,12 @@ with tab3:
     REP_COL  = "Сообщили ли ответственному лицу?"
 
     km = st.columns(4)
-    km[0].metric("👁️ Всего наблюдений", len(fk))
+    km[0].metric("Всего наблюдений", len(fk))
     km[1].metric("🔴 Критических",
                  int(fk["критическое оповещание"].sum()) if "критическое оповещание" in fk.columns else "—")
-    km[2].metric("🛑 Остановлено работ",
+    km[2].metric("Остановлено работ",
                  bool_count(fk[STOP_COL]) if STOP_COL in fk.columns else "—")
-    km[3].metric("📢 Сообщили руководству",
+    km[3].metric("Сообщили руководству",
                  bool_count(fk[REP_COL]) if REP_COL in fk.columns else "—")
 
     st.markdown("---")
@@ -425,7 +455,7 @@ with tab3:
 
     # Динамика по типам
     if not fk["_ym"].isna().all():
-        st.markdown("### 📈 Динамика наблюдений по месяцам")
+        st.markdown("### Динамика наблюдений по месяцам")
         if "Тип наблюдения" in fk.columns:
             kts_t = fk.groupby(["_ym","Тип наблюдения"]).size().reset_index(name="n")
             fig_kd = go.Figure()
@@ -471,7 +501,7 @@ with tab3:
                 st.plotly_chart(fig_sc, width='stretch')
 
     # Таблица
-    st.markdown("### 📋 Последние наблюдения")
+    st.markdown("### Последние наблюдения")
     kor_show = [c for c in ["Дата","Тип наблюдения","Категория наблюдения",
                              "Организация","риск","критическое оповещание",
                              STOP_COL, REP_COL] if c in fk.columns]
@@ -483,7 +513,7 @@ with tab3:
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab4:
-    st.markdown("## 🔮 Предиктивная аналитика")
+    st.markdown("## Предиктивная аналитика")
 
     horizon = st.select_slider("Горизонт прогноза (месяцев):", options=[3, 6, 12], value=12)
 
@@ -551,7 +581,7 @@ with tab4:
                 title=title_cfg(f"Прогноз происшествий — горизонт {horizon} мес. (тренд + сезонность)"))
             st.plotly_chart(fig_fc, width='stretch')
 
-            with st.expander("📋 Таблица прогноза"):
+            with st.expander("Таблица прогноза"):
                 fc_df = pd.DataFrame({
                     "Период":          f_labels,
                     "Прогноз":         np.round(f_pred).astype(int),
@@ -563,7 +593,7 @@ with tab4:
     st.markdown("---")
 
     # Топ-5 зон риска
-    st.markdown("### 🏆 Топ-5 зон риска")
+    st.markdown("### Топ-5 зон риска")
     if ORG_COL in fi.columns:
         rdf = fi.groupby(ORG_COL).agg(incidents=("_date","count")).reset_index()
         if "Несчастный случай" in fi.columns:
@@ -599,7 +629,7 @@ with tab4:
     # YoY
     if len(years_all) >= 2 and not fi["_ym"].isna().all():
         st.markdown("---")
-        st.markdown("### 📅 Сравнение год к году")
+        st.markdown("### Сравнение год к году")
         ym_g = fi.groupby(["_year","_month"]).size().reset_index(name="count")
         mn = {1:"Янв",2:"Фев",3:"Мар",4:"Апр",5:"Май",6:"Июн",
               7:"Июл",8:"Авг",9:"Сен",10:"Окт",11:"Ноя",12:"Дек"}
@@ -619,7 +649,7 @@ with tab4:
 
     # Экономика
     st.markdown("---")
-    st.markdown("### 💰 Прогнозируемый экономический эффект от AI")
+    st.markdown("### Прогнозируемый экономический эффект от AI")
     econ = pd.DataFrame({
         "Статья":        ["Прямые затраты на НС","Косвенные потери","Штрафы регулятора","Расследования","Автоматизация аудитов"],
         "До (млн ₸)":   [63, 126, 17, 11, 0],
@@ -634,16 +664,16 @@ with tab4:
     apply_layout(fig_ec, barmode="group", height=280,
                          title=title_cfg("Сравнение затрат до / после AI (млн ₸)"))
     st.plotly_chart(fig_ec, width='stretch')
-    st.success("💰 **Прогнозируемая годовая экономия: ≈ 121 млн ₸ (~250 000 USD)**\n\n"
-               "🏥 Предотвращённых НС/год: ~7 &nbsp;|&nbsp; Микротравм/год: ~48 &nbsp;|&nbsp; "
-               "⏱️ Время реагирования: 72 ч → 12 ч (↓ 83%)")
+    st.success("Прогнозируемая годовая экономия: ≈ 121 млн ₸ (~250 000 USD)\n\n"
+               "Предотвращённых НС/год: ~7 | Микротравм/год: ~48 | "
+               "Время реагирования: 72 ч → 12 ч (↓ 83%)")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — АЛЕРТЫ & РИСКИ
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab5:
-    st.markdown("## 🚨 Система алертов и управление рисками")
+    st.markdown("## Система алертов и управление рисками")
 
     a1, a2, a3, a4 = st.columns(4)
     a1.markdown('<div class="alert-red"><div style="font-size:1.05rem;font-weight:800;color:#ff3b30">🔴 Критический</div><div style="font-size:.78rem;color:#aa5050;margin-top:4px">Нарушений &gt; порог × 2</div></div>', unsafe_allow_html=True)
@@ -654,7 +684,7 @@ with tab5:
     st.markdown("---")
 
     # Critical records
-    st.markdown("### 🔴 Критические записи Коргау")
+    st.markdown("### Критические записи Коргау")
     if "критическое оповещание" in fk.columns:
         crit_df = fk[fk["критическое оповещание"] == 1]
         crit_cols = [c for c in ["Дата","Тип наблюдения","Категория наблюдения",
@@ -698,7 +728,7 @@ with tab5:
 
     # YoY Korgau
     if not fk["_ym"].isna().all() and len(fk["_year"].dropna().unique()) >= 2:
-        st.markdown("### 📅 Сравнение Коргау год к году")
+        st.markdown("### Сравнение Коргау год к году")
         ky = fk.groupby(["_year","_month"]).size().reset_index(name="count")
         mn2 = {1:"Янв",2:"Фев",3:"Мар",4:"Апр",5:"Май",6:"Июн",
                7:"Июл",8:"Авг",9:"Сен",10:"Окт",11:"Ноя",12:"Дек"}
