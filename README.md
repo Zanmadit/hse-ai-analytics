@@ -21,21 +21,19 @@
 ```
 .
 ├── app
-│   ├── api.py                      # REST API на FastAPI для интеграции с внешними системами
-│   ├── syntetic.py                 # Скрипт генерации данных для тестирования
-│   ├── config.py            
-│   └── dashboard.py                # Визуальный интерфейс на Streamlit (панель управления)
-├── data/                           # Загрузка и предварительная обработка данных
-├── src
-│   ├── alerts.py                   # Логика уведомлений Korgau Map
-│   ├── economics.py                # Расчет финансовых показателей и ROI
-│   ├── eda.py
-│   ├── etl.py
-│   ├── forecasting.py              # Модели временных рядов
-│   ├── nlp_analysis.py             # Анализ текста (SentenceTransformers, KMeans)
-│   ├── recommendations.py
-│   └── risk_scoring.py             # Математическая модель для расчета индексов риска
-└── .env.example                    # Переменные среды
+│   └── dashboard.py               # визуализация
+├── data                           # данные
+│   ├── incidents_upd.csv          # обновленые данные Происшествий
+│   ├── incidents.xlsx
+│   ├── korgau_upd.csv             # обновление данные Коргау
+│   └── korgau.xlsx
+├── notebooks                      # работа с данными, извлечение параметров
+│   ├── incidents.ipynb
+│   └── korgau.ipynb
+├── pyproject.toml
+├── README_EN.md
+├── README.md
+└── uv.lock          
 ```
 
 
@@ -51,9 +49,4 @@ uv sync
 ```
 streamlit run app/dashboard.py
 ```
-4. Запуск API
-```
-uvicorn app.api:app --reload
-```
 
-Примечание: В проекте используются синтетические данные, расположенные в папке `data`

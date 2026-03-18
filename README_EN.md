@@ -21,20 +21,19 @@ This solution integrates data on incidents and safety behavior audits, transform
 ```
 .
 ├── app
-│   ├── api.py                      # REST API on FastAPI for integration with external systems
-│   ├── syntetic.py                 # Data generation script for testing
-│   ├── config.py    
-│   └── dashboard.py                # Visual interface on Streamlit (Dashboard)
-├── data/                           # Data Loading and Preprocessing
-├── src
-│   ├── alerts.py                   # Korgau Map notification logic
-│   ├── economics.py                # Calculation of financial performance and ROI
-│   ├── eda.py
-│   ├── etl.py
-│   ├── forecasting.py              # Time Series Models
-│   ├── nlp_analysis.py             # Text Analysis (SentenceTransformers, KMeans)
-│   ├── recommendations.py
-│   └── risk_scoring.py             # Mathematical Model for Calculating Risk Indices
+│   └── dashboard.py               # vizualization
+├── data                           # data
+│   ├── incidents_upd.csv          # updated Incidents
+│   ├── incidents.xlsx
+│   ├── korgau_upd.csv             # updated Korgau
+│   └── korgau.xlsx
+├── notebooks                      # working wirh data, feature extraction
+│   ├── incidents.ipynb
+│   └── korgau.ipynb
+├── pyproject.toml
+├── README_EN.md
+├── README.md
+└── uv.lock    
 ```
 
 
@@ -50,9 +49,3 @@ uv sync
 ```
 streamlit run app/dashboard.py
 ```
-4. Launch API
-```
-uvicorn app.api:app --reload
-```
-
-Note: The project uses synthetic data located in the folder `data`
