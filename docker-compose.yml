@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    container_name: hse_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: hse_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - hse_pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: hse_web
+    restart: always
+    ports:
+      - "8501:8501"
+    environment:
+      - DB_URL=postgresql://user:password@db:5432/hse_db
+      - OLLAMA_URL=http://host.docker.internal:11434
+    depends_on:
+      - db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  hse_pgdata:

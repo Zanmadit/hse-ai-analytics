@@ -1,18 +1,13 @@
 """
 HSE Analytics Dashboard — Streamlit
-Данные: Database (PostgreSQL)
-Тёмная тема | AI Integrated
+Данные: incidents_upd.csv + korgau_upd.csv
+Тёмная тема | Без AI
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-
-from app.utils.data_loader import load_data
-from app.ml.forecast import generate_forecast
-from app.ml.risk_score import calculate_top_risks
-from app.llm.db_chat import ask_question
 
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
 
@@ -156,10 +151,62 @@ def bool_count(series):
 
 # ─── DATA LOADING ─────────────────────────────────────────────────────────────
 
+@st.cache_data
+def load_data():
+    inc = pd.read_csv("data/incidents_upd.csv")
+    kor = pd.read_csv("data/korgau_upd.csv")
+
+    # Incidents — parse datetime
+    for c in ["Время возникновения происшествия", "Время и дата сообщения"]:
+        if c in inc.columns:
+            inc[c] = pd.to_datetime(inc[c], errors="coerce")
+    if "Время возникновения происшествия" in inc.columns:
+        inc["_date"] = inc["Время возникновения происшествия"]
+    elif "Время и дата сообщения" in inc.columns:
+        inc["_date"] = inc["Время и дата сообщения"]
+    else:
+        inc["_date"] = pd.NaT
+
+    inc["_year"]  = inc["_date"].dt.year
+    inc["_month"] = inc["_date"].dt.month
+    inc["_ym"]    = inc["_date"].dt.to_period("M").astype(str)
+    inc["_dow"]   = inc["_date"].dt.day_name()
+    inc["_hour"]  = inc["_date"].dt.hour
+
+    # Normalize bool columns
+    bool_inc = ["Несчастный случай", "В рабочее время", "На рабочем месте"]
+    for col in bool_inc:
+        if col in inc.columns:
+            inc[col] = inc[col].map(
+                lambda x: True if str(x).strip().lower() in ("true","1","да","yes")
+                          else (False if str(x).strip().lower() in ("false","0","нет","no") else np.nan)
+            )
+
+    # Korgau — parse date
+    if "Дата" in kor.columns:
+        kor["Дата"] = pd.to_datetime(kor["Дата"], errors="coerce")
+    kor["_year"]  = kor["Дата"].dt.year
+    kor["_month"] = kor["Дата"].dt.month
+    kor["_ym"]    = kor["Дата"].dt.to_period("M").astype(str)
+
+    bool_kor = [
+        "Производилась ли остановка работ?",
+        "Обсудили ли вы небезопасное действие / небезопасное поведение с наблюдаемым?",
+        "Сообщили ли ответственному лицу?",
+        "Было ли небезопасное условие / поведение исправлено и опасность устранена?",
+    ]
+    for col in bool_kor:
+        if col in kor.columns:
+            kor[col] = kor[col].map(
+                lambda x: True if str(x).strip().lower() in ("true","1","да","yes")
+                          else (False if str(x).strip().lower() in ("false","0","нет","no") else np.nan)
+            )
+    return inc, kor
+
 try:
     inc, kor = load_data()
-except Exception as e:
-    st.error(f"❌ Файл не найден: {e}\n\nПожалуйста, убедитесь, что БД запущена и проинициализирована.")
+except FileNotFoundError as e:
+    st.error(f"❌ Файл не найден: {e}\n\nПоложите `incidents_upd.csv` и `korgau_upd.csv` рядом со скриптом.")
     st.stop()
 
 ORG_COL = "Наименование организации ДЗО"
@@ -168,11 +215,11 @@ BD_COL  = "Бизнес направление"
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## HSE Аналитика")
+    st.markdown("## 🛡️ HSE Аналитика")
     st.caption("Охрана труда и промышленная безопасность")
     st.markdown("---")
 
-    years_all = sorted(inc["_year"].dropna().unique().astype(int).tolist()) if "_year" in inc.columns else []
+    years_all = sorted(inc["_year"].dropna().unique().astype(int).tolist())
     sel_years = st.multiselect("Год", years_all, default=years_all)
 
     orgs_all = ["Все"] + (sorted(inc[ORG_COL].dropna().unique().tolist()) if ORG_COL in inc.columns else [])
@@ -182,7 +229,7 @@ with st.sidebar:
     sel_bd  = st.selectbox("Бизнес направление", bds_all)
 
     st.markdown("---")
-    years_str = f"{int(inc['_year'].min())}–{int(inc['_year'].max())}" if ("_year" in inc.columns and not inc["_year"].isna().all()) else "—"
+    years_str = f"{int(inc['_year'].min())}–{int(inc['_year'].max())}" if not inc["_year"].isna().all() else "—"
     st.markdown(f"**Происшествий:** `{len(inc)}`")
     st.markdown(f"**Наблюдений Коргау:** `{len(kor)}`")
     st.markdown(f"**Период:** `{years_str}`")
@@ -190,7 +237,7 @@ with st.sidebar:
 # ─── FILTERS ──────────────────────────────────────────────────────────────────
 
 fi = inc.copy()
-if sel_years and "_year" in fi.columns:
+if sel_years:
     fi = fi[fi["_year"].isin(sel_years)]
 if sel_org != "Все" and ORG_COL in fi.columns:
     fi = fi[fi[ORG_COL] == sel_org]
@@ -198,18 +245,17 @@ if sel_bd != "Все" and BD_COL in fi.columns:
     fi = fi[fi[BD_COL] == sel_bd]
 
 fk = kor.copy()
-if sel_years and "_year" in fk.columns:
+if sel_years:
     fk = fk[fk["_year"].isin(sel_years)]
 
 # ─── TABS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Обзор / KPI",
     "Происшествия",
     "Карта Коргау",
     "Предиктив",
     "Алерты & Риски",
-    "Чат с БД (AI)",
 ])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -238,7 +284,7 @@ with tab1:
     c_left, c_right = st.columns([3, 2])
 
     with c_left:
-        if "_ym" in fi.columns and not fi["_ym"].isna().all():
+        if not fi["_ym"].isna().all():
             ts = fi.groupby("_ym").size().reset_index(name="Всего").sort_values("_ym")
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -270,18 +316,17 @@ with tab1:
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        if "_dow" in fi.columns:
-            order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-            ru    = {"Monday":"Пн","Tuesday":"Вт","Wednesday":"Ср",
-                     "Thursday":"Чт","Friday":"Пт","Saturday":"Сб","Sunday":"Вс"}
-            dow = fi["_dow"].value_counts().reindex(order).fillna(0).reset_index()
-            dow.columns = ["day","count"]
-            dow["Д"] = dow["day"].map(ru)
-            st.plotly_chart(bar_v(dow,"Д","count","По дням недели", PALETTE[0], 260),
-                            width='stretch')
+        order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        ru    = {"Monday":"Пн","Tuesday":"Вт","Wednesday":"Ср",
+                 "Thursday":"Чт","Friday":"Пт","Saturday":"Сб","Sunday":"Вс"}
+        dow = fi["_dow"].value_counts().reindex(order).fillna(0).reset_index()
+        dow.columns = ["day","count"]
+        dow["Д"] = dow["day"].map(ru)
+        st.plotly_chart(bar_v(dow,"Д","count","По дням недели", PALETTE[0], 260),
+                        width='stretch')
 
     with c2:
-        if "_hour" in fi.columns and fi["_hour"].notna().any():
+        if fi["_hour"].notna().any():
             hr = fi["_hour"].dropna().value_counts().sort_index().reset_index()
             hr.columns = ["Час","Кол-во"]
             colors_hr = [PALETTE[1] if h in range(6,10) or h in range(14,18)
@@ -348,21 +393,18 @@ with tab2:
         st.markdown("### Тепловая карта: Организация × Вид работ")
         hm = fi.groupby([ORG_COL,"Вид работ"]).size().reset_index(name="n")
         hm_p = hm.pivot(index=ORG_COL, columns="Вид работ", values="n").fillna(0)
-        # Обрезаем длинные названия для читаемости
-        short_cols = [c[:25] + "…" if len(c) > 25 else c for c in hm_p.columns.tolist()]
-        short_rows = [r[:30] + "…" if len(r) > 30 else r for r in hm_p.index.tolist()]
+        # Обрезаем длинные названия колонок для читаемости
+        short_cols = [c[:22] + "…" if len(c) > 22 else c for c in hm_p.columns.tolist()]
         fig_hm = go.Figure(go.Heatmap(
             z=hm_p.values,
             x=short_cols,
-            y=short_rows,
+            y=hm_p.index.tolist(),
             colorscale=[[0,"#111820"],[0.5,"#1a4baa"],[1,"#ff3b30"]],
             hovertemplate="<b>%{y}</b><br>%{x}: %{z}<extra></extra>",
         ))
-        apply_layout(fig_hm, height=max(420, len(hm_p) * 28 + 80),
-                     title=title_cfg("Интенсивность происшествий"),
+        apply_layout(fig_hm, height=420, title=title_cfg("Интенсивность происшествий"),
                      xaxis_extra=dict(tickangle=-40, tickfont=dict(size=10, color="#4a6a88")),
-                     yaxis_extra=dict(tickfont=dict(size=10, color="#8899aa")),
-                     margin=dict(l=220, r=10, t=44, b=120))
+                     margin=dict(l=10, r=10, t=44, b=120))
         st.plotly_chart(fig_hm, width='stretch')
 
     # Таблица
@@ -412,7 +454,7 @@ with tab3:
                             width='stretch')
 
     # Динамика по типам
-    if "_ym" in fk.columns and not fk["_ym"].isna().all():
+    if not fk["_ym"].isna().all():
         st.markdown("### Динамика наблюдений по месяцам")
         if "Тип наблюдения" in fk.columns:
             kts_t = fk.groupby(["_ym","Тип наблюдения"]).size().reset_index(name="n")
@@ -437,7 +479,7 @@ with tab3:
                             width='stretch')
     with kc4:
         # Корреляция риск → происшествия
-        if "риск" in fk.columns and "_ym" in fk.columns and not fk["_ym"].isna().all() and "_ym" in fi.columns and not fi["_ym"].isna().all():
+        if "риск" in fk.columns and not fk["_ym"].isna().all() and not fi["_ym"].isna().all():
             kr = fk.groupby("_ym")["риск"].mean().reset_index(name="avg_risk")
             ir = fi.groupby("_ym").size().reset_index(name="inc_count")
             mg = kr.merge(ir, on="_ym", how="inner")
@@ -466,7 +508,6 @@ with tab3:
     st.dataframe(fk[kor_show].sort_values("Дата", ascending=False).head(30),
                  width='stretch', height=320)
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 4 — ПРЕДИКТИВ
 # ══════════════════════════════════════════════════════════════════════════════
@@ -476,81 +517,117 @@ with tab4:
 
     horizon = st.select_slider("Горизонт прогноза (месяцев):", options=[3, 6, 12], value=12)
 
-    fc_res = generate_forecast(fi, horizon)
-    if fc_res is not None:
-        ts_all, trend_hist, f_labels, f_pred, f_upper, f_lower = (
-            fc_res["ts_all"], fc_res["trend_hist"], fc_res["f_labels"], 
-            fc_res["f_pred"], fc_res["f_upper"], fc_res["f_lower"]
-        )
-        
-        fig_fc = go.Figure()
-        # Confidence band
-        fig_fc.add_trace(go.Scatter(
-            x=f_labels + f_labels[::-1],
-            y=list(f_upper) + list(f_lower)[::-1],
-            fill="toself", fillcolor="rgba(255,149,0,0.1)",
-            line=dict(color="rgba(0,0,0,0)"),
-            name="Доверительный интервал 90%",
-        ))
-        # Historical
-        fig_fc.add_trace(go.Scatter(
-            x=ts_all["_ym"], y=ts_all["count"],
-            fill="tozeroy", fillcolor="rgba(26,107,255,0.1)",
-            line=dict(color="#1a6bff", width=2.5), name="Факт",
-            hovertemplate="<b>%{x}</b><br>Факт: %{y}<extra></extra>",
-        ))
-        # Trend
-        fig_fc.add_trace(go.Scatter(
-            x=ts_all["_ym"], y=trend_hist,
-            line=dict(color="#4a6a88", width=1, dash="dash"),
-            name="Тренд (факт)", mode="lines",
-        ))
-        # Forecast
-        fig_fc.add_trace(go.Scatter(
-            x=f_labels, y=np.round(f_pred).astype(int),
-            line=dict(color="#ff9500", width=2.5, dash="dot"),
-            mode="lines+markers", marker=dict(size=6, color="#ff9500"),
-            name="Прогноз",
-            hovertemplate="<b>%{x}</b><br>Прогноз: %{y}<extra></extra>",
-        ))
-        fig_fc.add_vline(x=ts_all["_ym"].iloc[-1],
-                         line=dict(color="#4a6a88", dash="dash", width=1))
-        fig_fc.add_annotation(
-            x=ts_all["_ym"].iloc[-1], y=float(ts_all["count"].max()),
-            text="◀ Факт | Прогноз ▶",
-            showarrow=False, font=dict(color="#4a6a88", size=11), xshift=10, yshift=8,
-        )
-        apply_layout(fig_fc, height=330,
-            title=title_cfg(f"Прогноз происшествий — горизонт {horizon} мес. (тренд + сезонность)"))
-        st.plotly_chart(fig_fc, width='stretch')
+    if not fi["_ym"].isna().all():
+        ts_all = fi.groupby("_ym").size().reset_index(name="count").sort_values("_ym")
+        y = ts_all["count"].values.astype(float)
+        n = len(y)
 
-        with st.expander("Таблица прогноза"):
-            fc_df = pd.DataFrame({
-                "Период":          f_labels,
-                "Прогноз":         np.round(f_pred).astype(int),
-                "Нижняя граница":  np.round(f_lower).astype(int),
-                "Верхняя граница": np.round(f_upper).astype(int),
-            })
-            st.dataframe(fc_df, width='stretch', height=300)
+        if n >= 6:
+            x = np.arange(n)
+            z = np.polyfit(x, y, 1)
+            trend_hist = np.polyval(z, x)
+            residuals  = y - trend_hist
+
+            season_len = min(12, n)
+            season = np.array([residuals[i::season_len].mean() for i in range(season_len)])
+
+            fx      = np.arange(n, n + horizon)
+            f_pred  = np.maximum(0, np.polyval(z, fx) + [season[i % season_len] for i in range(horizon)])
+            f_std   = residuals.std()
+            f_upper = f_pred + 1.6 * f_std
+            f_lower = np.maximum(0, f_pred - 1.6 * f_std)
+
+            last_p   = pd.Period(ts_all["_ym"].iloc[-1], freq="M")
+            f_labels = [(last_p + i + 1).strftime("%Y-%m") for i in range(horizon)]
+
+            fig_fc = go.Figure()
+            # Confidence band
+            fig_fc.add_trace(go.Scatter(
+                x=f_labels + f_labels[::-1],
+                y=list(f_upper) + list(f_lower)[::-1],
+                fill="toself", fillcolor="rgba(255,149,0,0.1)",
+                line=dict(color="rgba(0,0,0,0)"),
+                name="Доверительный интервал 90%",
+            ))
+            # Historical
+            fig_fc.add_trace(go.Scatter(
+                x=ts_all["_ym"], y=ts_all["count"],
+                fill="tozeroy", fillcolor="rgba(26,107,255,0.1)",
+                line=dict(color="#1a6bff", width=2.5), name="Факт",
+                hovertemplate="<b>%{x}</b><br>Факт: %{y}<extra></extra>",
+            ))
+            # Trend
+            fig_fc.add_trace(go.Scatter(
+                x=ts_all["_ym"], y=trend_hist,
+                line=dict(color="#4a6a88", width=1, dash="dash"),
+                name="Тренд (факт)", mode="lines",
+            ))
+            # Forecast
+            fig_fc.add_trace(go.Scatter(
+                x=f_labels, y=np.round(f_pred).astype(int),
+                line=dict(color="#ff9500", width=2.5, dash="dot"),
+                mode="lines+markers", marker=dict(size=6, color="#ff9500"),
+                name="Прогноз",
+                hovertemplate="<b>%{x}</b><br>Прогноз: %{y}<extra></extra>",
+            ))
+            fig_fc.add_vline(x=ts_all["_ym"].iloc[-1],
+                             line=dict(color="#4a6a88", dash="dash", width=1))
+            fig_fc.add_annotation(
+                x=ts_all["_ym"].iloc[-1], y=float(y.max()),
+                text="◀ Факт | Прогноз ▶",
+                showarrow=False, font=dict(color="#4a6a88", size=11), xshift=10, yshift=8,
+            )
+            apply_layout(fig_fc, height=330,
+                title=title_cfg(f"Прогноз происшествий — горизонт {horizon} мес. (тренд + сезонность)"))
+            st.plotly_chart(fig_fc, width='stretch')
+
+            with st.expander("Таблица прогноза"):
+                fc_df = pd.DataFrame({
+                    "Период":          f_labels,
+                    "Прогноз":         np.round(f_pred).astype(int),
+                    "Нижняя граница":  np.round(f_lower).astype(int),
+                    "Верхняя граница": np.round(f_upper).astype(int),
+                })
+                st.dataframe(fc_df, width='stretch', height=300)
 
     st.markdown("---")
 
     # Топ-5 зон риска
     st.markdown("### Топ-5 зон риска")
-    rdf = calculate_top_risks(fi, fk)
-    if rdf is not None and not rdf.empty:
+    if ORG_COL in fi.columns:
+        rdf = fi.groupby(ORG_COL).agg(incidents=("_date","count")).reset_index()
+        if "Несчастный случай" in fi.columns:
+            ns_s = fi.groupby(ORG_COL)["Несчастный случай"].sum().reset_index()
+            ns_s.columns = [ORG_COL, "ns"]
+            rdf = rdf.merge(ns_s, on=ORG_COL, how="left")
+        else:
+            rdf["ns"] = 0
+        if "Организация" in fk.columns and "риск" in fk.columns:
+            kr_o = fk.groupby("Организация")["риск"].mean().reset_index()
+            kr_o.columns = [ORG_COL, "kor_risk"]
+            rdf = rdf.merge(kr_o, on=ORG_COL, how="left").fillna(0)
+        else:
+            rdf["kor_risk"] = 0
+
+        im = rdf["incidents"].max() or 1
+        nm = rdf["ns"].max() or 1
+        km_ = rdf["kor_risk"].max() or 1
+        rdf["idx"] = (0.5*rdf["incidents"]/im + 0.3*rdf["ns"]/nm + 0.2*rdf["kor_risk"]/km_) * 100
+        rdf["idx"] = rdf["idx"].round(1)
+        rdf = rdf.sort_values("idx", ascending=False).head(5)
+
         for _, row in rdf.iterrows():
             s = row["idx"]
             color = "#ff3b30" if s >= 70 else "#ff9500" if s >= 45 else "#ffcc00"
             emoji = "🔴" if s >= 70 else "🟠" if s >= 45 else "🟡"
             ca, cb, cc, cd = st.columns([4,1,1,1])
-            ca.progress(min(s/100, 1.0), text=f"{emoji} **{row[ORG_COL]}**")
+            ca.progress(int(s)/100, text=f"{emoji} **{row[ORG_COL]}**")
             cb.markdown(f"<span style='color:#4a6a88;font-size:.8rem'>Происш.</span><br><b>{int(row['incidents'])}</b>", unsafe_allow_html=True)
             cc.markdown(f"<span style='color:#4a6a88;font-size:.8rem'>НС</span><br><b style='color:#ff3b30'>{int(row['ns'])}</b>", unsafe_allow_html=True)
             cd.markdown(f"<span style='color:#4a6a88;font-size:.8rem'>Индекс</span><br><b style='color:{color}'>{s}</b>", unsafe_allow_html=True)
 
     # YoY
-    if len(years_all) >= 2 and "_ym" in fi.columns and not fi["_ym"].isna().all():
+    if len(years_all) >= 2 and not fi["_ym"].isna().all():
         st.markdown("---")
         st.markdown("### Сравнение год к году")
         ym_g = fi.groupby(["_year","_month"]).size().reset_index(name="count")
@@ -591,7 +668,6 @@ with tab4:
                "Предотвращённых НС/год: ~7 | Микротравм/год: ~48 | "
                "Время реагирования: 72 ч → 12 ч (↓ 83%)")
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — АЛЕРТЫ & РИСКИ
 # ══════════════════════════════════════════════════════════════════════════════
@@ -625,41 +701,19 @@ with tab5:
     ac1, ac2 = st.columns(2)
     with ac1:
         if "риск" in fk.columns:
-            risk_unique = fk["риск"].dropna().unique()
-            if len(risk_unique) > 1:
-                # Несколько уровней — классическая столбчатая
-                rd = fk["риск"].value_counts().sort_index().reset_index()
-                rd.columns = ["Уровень","Кол-во"]
-                risk_colors = {1:"#66bb6a",2:"#ffcc00",3:"#ff9500",4:"#ff3b30",5:"#cc0000"}
-                fig_rd = go.Figure(go.Bar(
-                    x=rd["Уровень"].astype(str), y=rd["Кол-во"],
-                    marker=dict(color=[risk_colors.get(r,"#1a6bff") for r in rd["Уровень"]]),
-                    hovertemplate="Риск %{x}: %{y} наблюдений<extra></extra>",
-                ))
-                apply_layout(fig_rd, height=280, title=title_cfg("Распределение уровней риска (Коргау)"))
-                st.plotly_chart(fig_rd, width='stretch')
-            else:
-                # Все записи с одним уровнем риска — показываем Критические vs Некритические
-                if "критическое оповещание" in fk.columns:
-                    n_crit = int(fk["критическое оповещание"].sum())
-                    n_norm = len(fk) - n_crit
-                    fig_rd = go.Figure(go.Pie(
-                        labels=["Некритические", "Критические"],
-                        values=[n_norm, n_crit],
-                        hole=0.44,
-                        marker=dict(colors=["#66bb6a", "#ff3b30"],
-                                    line=dict(color="#0a0e13", width=2)),
-                        textfont=dict(color="#e8f4ff"),
-                        hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
-                    ))
-                    apply_layout(fig_rd, height=280,
-                                 title=title_cfg(f"Критические vs Некритические (риск = {int(risk_unique[0])})"))
-                    st.plotly_chart(fig_rd, width='stretch')
-                else:
-                    st.info(f"Все наблюдения имеют одинаковый уровень риска: {int(risk_unique[0])}")
+            rd = fk["риск"].value_counts().sort_index().reset_index()
+            rd.columns = ["Уровень","Кол-во"]
+            risk_colors = {1:"#66bb6a",2:"#ffcc00",3:"#ff9500",4:"#ff3b30",5:"#cc0000"}
+            fig_rd = go.Figure(go.Bar(
+                x=rd["Уровень"].astype(str), y=rd["Кол-во"],
+                marker=dict(color=[risk_colors.get(r,"#1a6bff") for r in rd["Уровень"]]),
+                hovertemplate="Риск %{x}: %{y} наблюдений<extra></extra>",
+            ))
+            apply_layout(fig_rd, height=280, title=title_cfg("Распределение уровней риска (Коргау)"))
+            st.plotly_chart(fig_rd, width='stretch')
 
     with ac2:
-        if "критическое оповещание" in fk.columns and "_ym" in fk.columns and not fk["_ym"].isna().all():
+        if "критическое оповещание" in fk.columns and not fk["_ym"].isna().all():
             crit_ts = fk[fk["критическое оповещание"]==1].groupby("_ym").size().reset_index(name="n")
             all_ts_ = fk.groupby("_ym").size().reset_index(name="total")
             mg2 = all_ts_.merge(crit_ts, on="_ym", how="left").fillna(0).sort_values("_ym")
@@ -673,7 +727,7 @@ with tab5:
             st.plotly_chart(fig_ct, width='stretch')
 
     # YoY Korgau
-    if "_ym" in fk.columns and not fk["_ym"].isna().all() and len(fk["_year"].dropna().unique()) >= 2:
+    if not fk["_ym"].isna().all() and len(fk["_year"].dropna().unique()) >= 2:
         st.markdown("### Сравнение Коргау год к году")
         ky = fk.groupby(["_year","_month"]).size().reset_index(name="count")
         mn2 = {1:"Янв",2:"Фев",3:"Мар",4:"Апр",5:"Май",6:"Июн",
@@ -690,21 +744,3 @@ with tab5:
             ))
         apply_layout(fig_ky, height=280, title=title_cfg("Коргау: помесячное сравнение"))
         st.plotly_chart(fig_ky, width='stretch')
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 6 — AI CHAT
-# ══════════════════════════════════════════════════════════════════════════════
-
-with tab6:
-    st.markdown("## Чат с Данными")
-    st.caption("Пишите запросы на естественном языке (например: 'Покажи сколько происшествий было в марте?'). Агент преобразует их в SQL и вернёт ответ из PostgreSQL.")
-    
-    user_query = st.text_input("Ваш вопрос:")
-    if st.button("Спросить"):
-        if user_query:
-            with st.spinner("Думаю... (LLM обрабатывает запрос)"):
-                answer = ask_question(user_query)
-                st.success("Ответ:")
-                st.write(answer)
-        else:
-            st.warning("Введите запрос!")
