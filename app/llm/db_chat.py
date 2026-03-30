@@ -1,15 +1,13 @@
-import os
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain_ollama import OllamaLLM
 
+from ..config import settings
+
 def get_db_chat_agent():
-    db_url = os.getenv("DB_URL", "postgresql://user:password@localhost:5432/hse_db")
-    # In docker, this is host.docker.internal:11434
-    ollama_url = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
     
-    db = SQLDatabase.from_uri(db_url)
-    llm = OllamaLLM(model="gemma3:4b", base_url=ollama_url, temperature=0)
+    db = SQLDatabase.from_uri(settings.DB_URL)
+    llm = OllamaLLM(model=settings.MODEL_NAME, base_url=settings.OLLAMA_URL, temperature=0)
     
     # We use create_sql_agent for natural DB interactions natively
     agent = create_sql_agent(
