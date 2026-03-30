@@ -12,7 +12,14 @@ def get_db_chat_agent():
     llm = OllamaLLM(model="gemma3:4b", base_url=ollama_url, temperature=0)
     
     # We use create_sql_agent for natural DB interactions natively
-    agent = create_sql_agent(llm=llm, db=db, verbose=True)
+    agent = create_sql_agent(
+        llm=llm, 
+        db=db, 
+        verbose=True,
+        max_iterations=40,         
+        max_execution_time=120,
+        agent_executor_kwargs={"handle_parsing_errors": True}
+    )
     return agent
 
 def ask_question(question: str):
@@ -23,5 +30,5 @@ def ask_question(question: str):
     except Exception as e:
         error_msg = str(e)
         if "Connection refused" in error_msg or "[Errno 111]" in error_msg:
-            return "❌ Ошибка: Ollama недоступна.\n\nУбедитесь, что:\n1. Ollama запущена локально (`ollama serve`).\n2. Модель (llama3) загружена (`ollama run llama3`).\n3. Docker имеет доступ к хосту (мы используем `host.docker.internal:11434`)."
+            return "❌ Ошибка: Ollama недоступна.\n\nУбедитесь, что:\n1. Ollama запущена локально (`ollama serve`).\n2. Модель (model_name) загружена (`ollama run model_name`).\n3. Docker имеет доступ к хосту (мы используем `host.docker.internal:11434`)."
         return f"❌ Ошибка LLM/БД: {error_msg}"
